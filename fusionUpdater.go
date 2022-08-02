@@ -34,7 +34,7 @@ func compareVersions(l string, c string) bool {
 
 func update(latest string) {
 
-	exec.Command("Fusion360AdminInstall.exe", "--process", "update", "--quiet")
+	exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "update", "--quiet")
 	exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "uninstall", "--purge-incomplete", "--quiet")
 
 	writeLatestVersion(latest)
