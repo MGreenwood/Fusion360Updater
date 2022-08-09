@@ -2,24 +2,32 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
 func main() {
+	var wg sync.WaitGroup
+	wg.Add(1)
 	latest := getLatestVersion()
 	current := getCurrentVersion()
 
 	// Compare and update if necessary
-	if compareVersions(latest, current) {
-		update(latest)
+	if compareVersions(latest, current, &wg) {
+		go update(latest, &wg)
 	}
+
+	wg.Wait()
 }
-func compareVersions(l string, c string) bool {
+
+func compareVersions(l string, c string, wg *sync.WaitGroup) bool {
+	//fmt.Printf("old %s  :: new %s\n", c, l)
 	l_vals := strings.Split(l, ".")
 	c_vals := strings.Split(c, ".")
 
@@ -29,15 +37,25 @@ func compareVersions(l string, c string) bool {
 		}
 	}
 
+	wg.Done()
 	return false
 }
 
-func update(latest string) {
+func update(latest string, wg *sync.WaitGroup) {
+	go func() {
+		defer wg.Done()
 
-	exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "update", "--quiet")
-	exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "uninstall", "--purge-incomplete", "--quiet")
+		upgrade := exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "update", "quiet")
+		err := upgrade.Start()
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(upgrade.Args)
+		upgrade.Wait()
 
-	writeLatestVersion(latest)
+		writeLatestVersion(latest)
+	}()
+
 }
 
 func writeLatestVersion(latest string) {
