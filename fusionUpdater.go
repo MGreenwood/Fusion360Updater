@@ -45,17 +45,28 @@ func update(latest string, wg *sync.WaitGroup) {
 	go func() {
 		defer wg.Done()
 
+		//upgrade := exec.Command("C:\\Program Files\\Autodesk\\webdeploy\\meta\\streamer\\streamer.bat")
 		upgrade := exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "update", "quiet")
 		err := upgrade.Start()
 		if err != nil {
-			fmt.Println(err)
+			log.Fatal(err)
 		}
-		fmt.Println(upgrade.Args)
-		upgrade.Wait()
+		err = upgrade.Wait()
+		if err != nil {
+			log.Fatal(err)
+		}
+		upgrade = exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process uninstall", "--purge-incomplete.exe", "--process", "update", "quiet")
+		err = upgrade.Start()
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = upgrade.Wait()
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		writeLatestVersion(latest)
 	}()
-
 }
 
 func writeLatestVersion(latest string) {
