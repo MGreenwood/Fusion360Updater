@@ -3,31 +3,77 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
 )
 
+var workingPath string = "C:\\FusionUpdater\\"
+var fusionInstallerURL string = "https://dl.appstreaming.autodesk.com/production/installers/Fusion%20360%20Admin%20Install.exe"
+var releaseVersionEndpoint string = "https://dl.appstreaming.autodesk.com/production/67316f5e79bc48318aa5f7b6bb58243d/73e72ada57b7480280f7a6f4a289729f/full.json"
+
 func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
-	latest := getLatestVersion()
-	current := getCurrentVersion()
+	latest := getReleaseVersionNumber(&wg)
+	wg.Wait()
+	current := getInstalledVersionNumber()
+	if current == "" { // not installed
+		fmt.Println("Fusion360 not installed.")
+		wg.Add(1)
+		go installFusion(&wg)
+		wg.Wait()
+		writeLatestVersion(latest)
+	} else {
+		fmt.Println("You are on version " + current + " and the latest version is " + latest)
 
-	// Compare and update if necessary
-	if compareVersions(latest, current, &wg) {
-		go update(latest, &wg)
+		// Compare and update if necessary
+		if compareVersions(latest, current) {
+			wg.Add(1)
+			go update(latest, &wg)
+		} else {
+			fmt.Println("Fusion is already up to date... exiting")
+		}
+
+		wg.Wait()
 	}
 
-	wg.Wait()
+	fmt.Println("Operation completed succcessfully. Enjoy Fusion!")
 }
 
-func compareVersions(l string, c string, wg *sync.WaitGroup) bool {
-	//fmt.Printf("old %s  :: new %s\n", c, l)
+func installFusion(wg *sync.WaitGroup) {
+	// create directory if it doesn't exists
+	if _, err := os.Stat(workingPath); os.IsNotExist(err) {
+		err := os.Mkdir(workingPath, 0777)
+
+		if err != nil {
+			log.Panic(err)
+		}
+	}
+
+	var downloadWG sync.WaitGroup
+	downloadWG.Add(1)
+	go downloadNewestVersion(&downloadWG)
+	downloadWG.Wait()
+	fmt.Println("Download Complete. Installing")
+
+	defer wg.Done()
+
+	upgrade := exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe") //, "quiet")
+	err := upgrade.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+/// returns true if versions differ
+func compareVersions(l string, c string) bool {
 	l_vals := strings.Split(l, ".")
 	c_vals := strings.Split(c, ".")
 
@@ -37,25 +83,73 @@ func compareVersions(l string, c string, wg *sync.WaitGroup) bool {
 		}
 	}
 
-	wg.Done()
 	return false
 }
 
 func update(latest string, wg *sync.WaitGroup) {
-	go func() {
-		defer wg.Done()
 
-		upgrade := exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "update", "quiet")
-		err := upgrade.Start()
+	var downloadWG sync.WaitGroup
+	downloadWG.Add(1)
+	go downloadNewestVersion(&downloadWG)
+	downloadWG.Wait()
+	fmt.Println("Download Complete. Applying Update")
+
+	defer wg.Done()
+
+	upgrade := exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "update", "quiet")
+	err := upgrade.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Update Complete. Cleaning up")
+	upgrade = exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process uninstall", "--purge-incomplete.exe")
+	err = upgrade.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Working diretory clean.")
+
+	writeLatestVersion(latest)
+	fmt.Println("Version information updated")
+}
+
+func downloadNewestVersion(wg *sync.WaitGroup) (err error) {
+	defer wg.Done()
+
+	fmt.Println("Downloading latest version.")
+
+	// Create the file
+	out, err := os.Create(workingPath + "Fusion360AdminInstall.exe")
+	defer func() {
 		if err != nil {
-			fmt.Println(err)
+			log.Fatal("Error occured while downloading the latest version.")
 		}
-		fmt.Println(upgrade.Args)
-		upgrade.Wait()
-
-		writeLatestVersion(latest)
 	}()
+	if err != nil {
+		return err
+	}
+	defer out.Close()
 
+	// Get the data
+	resp, err := http.Get(fusionInstallerURL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Check server response
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status: %s", resp.Status)
+	}
+
+	// Writer the body to file
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func writeLatestVersion(latest string) {
@@ -65,23 +159,24 @@ func writeLatestVersion(latest string) {
 	}
 }
 
-func getCurrentVersion() string {
+func getInstalledVersionNumber() string {
 
 	content, err := ioutil.ReadFile("C:\\FusionUpdater\\currentVersion.ini")
-	if err != nil {
-		log.Fatal(err)
+	if err != nil { // file not found, make it
+		return ""
 	}
 
 	return string(content)
 }
 
-func getLatestVersion() string {
-	endpoint := "https://dl.appstreaming.autodesk.com/production/67316f5e79bc48318aa5f7b6bb58243d/73e72ada57b7480280f7a6f4a289729f/full.json"
+func getReleaseVersionNumber(wg *sync.WaitGroup) string {
+	defer wg.Done()
+
 	client := http.Client{
-		Timeout: time.Second * 4,
+		Timeout: time.Second * 10,
 	}
 
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	req, err := http.NewRequest(http.MethodGet, releaseVersionEndpoint, nil)
 
 	if err != nil {
 		log.Fatal(err)
