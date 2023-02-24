@@ -13,9 +13,10 @@ Below is the batch script I use in my Intune deployment
 @echo off
 
 MD C:\FusionUpdater
-xcopy /s "%~dp0\fusion.exe" "C:\FusionUpdater"
+xcopy /s "%~dp0\fusionUpdater.exe" "C:\FusionUpdater"
 
-SCHTASKS /CREATE /SC DAILY /TN "MyTasks\Fusion Update Task" /TR "C:\FusionUpdater\fusion.exe" /ST 14:30 /RU System /F /RL HIGHEST
+SCHTASKS /CREATE /SC DAILY /TN "MyTasks\Fusion Update Task" /TR "C:\FusionUpdater\fusionUpdater.exe" /ST 14:30 /RU System /F /RL HIGHEST
 
-start /wait C:\FusionUpdater\fusion.exe
+start /wait C:\FusionUpdater\fusionUpdater.exe
+
 ```
