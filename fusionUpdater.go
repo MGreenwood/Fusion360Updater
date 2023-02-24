@@ -65,7 +65,7 @@ func installFusion(wg *sync.WaitGroup) {
 
 	defer wg.Done()
 
-	upgrade := exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe") //, "quiet")
+	upgrade := exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--quiet")
 	err := upgrade.Run()
 	if err != nil {
 		log.Fatal(err)
@@ -96,17 +96,19 @@ func update(latest string, wg *sync.WaitGroup) {
 
 	defer wg.Done()
 
-	upgrade := exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "update", "quiet")
+	upgrade := exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "update", "--quiet")
 	err := upgrade.Run()
 	if err != nil {
 		log.Fatal(err)
+		return;
 	}
 
 	fmt.Println("Update Complete. Cleaning up")
-	upgrade = exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process uninstall", "--purge-incomplete.exe")
+	upgrade = exec.Command("C:\\FusionUpdater\\Fusion360AdminInstall.exe", "--process", "uninstall", "--purge-incomplete")
 	err = upgrade.Run()
 	if err != nil {
 		log.Fatal(err)
+		return;
 	}
 	fmt.Println("Working diretory clean.")
 
